@@ -1,0 +1,23 @@
+"Phrases"
+{
+    "SPEC_WHEN_FULL_JOIN_SPEC"
+    {
+        "en"    "You have been moved to Spectator because the server is full. Type !autojoin to join the game when a slot opens up."
+    }
+    "SPEC_WHEN_FULL_AUTOJOIN_PLACE_QUEUE"
+    {
+        "en"    "You will join the game as soon as a slot opens up."
+    }
+    "SPEC_WHEN_FULL_AUTOJOIN_REMOVE_QUEUE"
+    {
+        "en"    "You have been removed from the auto join queue."
+    }
+    "SPEC_WHEN_FULL_NOT_FULL"
+    {
+        "en"    "The server is not full right now."
+    }
+    "SPEC_WHEN_FULL_NOT_SPEC"
+    {
+        "en"    "You must be a spectator to use this command."
+    }
+}
