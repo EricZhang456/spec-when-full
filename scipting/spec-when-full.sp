@@ -27,6 +27,7 @@ ConVar cvarVisibleMaxPlayers;
 ConVar cvarSourceTVEnabled;
 ConVar cvarReplayEnabled;
 
+// store userid inside as it will persist during map resets
 enum struct PlayerQueue {
     ArrayList clients;
 
@@ -39,26 +40,33 @@ enum struct PlayerQueue {
     }
 
     void Offer(int client) {
-        this.clients.Push(client);
+        this.clients.Push(GetClientUserId(client));
     }
 
     int Poll() {
         int lastIndex = this.clients.Length - 1;
         int value = this.clients.Get(lastIndex);
         this.clients.Erase(lastIndex);
-        return value;
+        return GetClientOfUserId(value);
     }
 
     bool RemoveFromQueue(int client) {
-        if (this.InQueue(client)) {
+        return this.RemoveUserIdFromQueue(GetClientUserId(client));
+    }
+
+    bool RemoveUserIdFromQueue(int userId) {
+        int index = this.clients.FindValue(userId);
+        if (index == -1) {
             return false;
         }
-        this.clients.Erase(this.clients.FindValue(client));
+        LogMessage("Removing %d from queue", userId);
+        LogStackTrace("trace");
+        this.clients.Erase(index);
         return true;
     }
 
     bool InQueue(int client) {
-        return this.clients.FindValue(client) != -1;
+        return this.clients.FindValue(GetClientUserId(client)) != -1;
     }
 
     void Clear() {
@@ -81,6 +89,7 @@ public void OnPluginStart() {
     spectatorQueue.Init();
 
     cvarMaxPlayersInGame = CreateConVar("sm_fullspec_maxplayers_in_game", "24", "Maximum amount of players allowed in game. Set to -1 to disable.");
+
     cvarVisibleMaxPlayers = FindConVar("sv_visiblemaxplayers");
     cvarSourceTVEnabled = FindConVar("tv_enable");
     cvarReplayEnabled = FindConVar("replay_enable");
@@ -90,6 +99,8 @@ public void OnPluginStart() {
 
     RegConsoleCmd("sm_autojoin", Cmd_AutoJoin, "Spectator auto-join.");
     AddCommandListener(OnClientJoinTeam, "jointeam");
+    HookEvent("player_disconnect", Event_OnPlayerDisconnect);
+    HookEvent("server_shutdown", Event_OnServerShutdown);
 
     AutoExecConfig();
 }
@@ -119,13 +130,24 @@ public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const c
     SetVisibleMaxPlayers();
 }
 
-public void OnClientDisconnect(int client) {
-    waitQueue.RemoveFromQueue(client);
-    spectatorQueue.RemoveFromQueue(client);
+public void Event_OnPlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
+    PrintToChatAll("hi");
+    LogMessage("disconnect");
+    int userid = event.GetInt("userid");
+    waitQueue.RemoveUserIdFromQueue(userid);
+    spectatorQueue.RemoveUserIdFromQueue(userid);
+    // wait 1 second before running autojoin checks as at this point the client might still be in game
+    CreateTimer(1.0, Timer_RunPlayerCheck);
 }
 
-public void OnClientDisconnect_Post(int client) {
+public Action Timer_RunPlayerCheck(Handle timer) {
     RunPlayerChangeChecks();
+    return Plugin_Continue;
+}
+
+public void Event_OnServerShutdown(Event event, const char[] name, bool dontBroadcast) {
+    waitQueue.Clear();
+    spectatorQueue.Clear();
 }
 
 void SetVisibleMaxPlayers() {
@@ -140,12 +162,15 @@ void SetVisibleMaxPlayers() {
         cvarVisibleMaxPlayers.IntValue = -1;
         return;
     }
-    cvarVisibleMaxPlayers.IntValue = maxHumanPlayers - cvarMaxPlayersInGame.IntValue;
+    LogMessage("maxHumanPlayers: %d", maxHumanPlayers);
+    cvarVisibleMaxPlayers.IntValue = cvarMaxPlayersInGame.IntValue;
 }
 
 public Action OnClientJoinTeam(int client, const char[] command, int argc) {
     bool isServerOverloaded = GetHumanCount() >= cvarMaxPlayersInGame.IntValue;
+    PrintToChatAll("HumanCount: %d MaxPlayers: %d", GetHumanCount(), cvarMaxPlayersInGame.IntValue)
     if (!isServerOverloaded) {
+        RunPlayerChangeChecks();
         return Plugin_Continue;
     }
     char team[BASE_STR_LEN];
@@ -209,13 +234,14 @@ public Action OnAFKKick(int client) {
 }
 
 void RunPlayerChangeChecks() {
-    if (waitQueue.IsEmpty()) {
-        return;
-    }
-    while (!IsServerFull()) {
+    while (!IsServerFull() && !waitQueue.IsEmpty()) {
         int client = waitQueue.Poll();
         spectatorQueue.RemoveFromQueue(client);
         FakeClientCommand(client, "jointeam " ... JOIN_TEAM_AUTO);
+    }
+    if (GetHumanCount() < cvarMaxPlayersInGame.IntValue) {
+        // stop tracking spectators when server is not full
+        spectatorQueue.Clear();
     }
 }
 
