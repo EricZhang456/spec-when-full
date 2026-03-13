@@ -2,6 +2,9 @@
 #include <sdktools>
 #include <tf2>
 #include <adt_array>
+#undef REQUIRE_PLUGIN
+#include <afkmanager>
+#define REQUIRE_PLUGIN
 
 #define BASE_STR_LEN 128
 
@@ -178,9 +181,21 @@ public Action Cmd_AutoJoin(int client, int args) {
         ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_NOT_SPEC");
         return Plugin_Handled;
     }
+    if (waitQueue.InQueue(client)) {
+        waitQueue.RemoveFromQueue(client);
+        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_AUTOJOIN_REMOVE_QUEUE");
+        return Plugin_Handled;
+    }
     waitQueue.Offer(client);
     ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_AUTOJOIN_PLACE_QUEUE");
     return Plugin_Handled;
+}
+
+public Action OnAFKKick(int client) {
+    if (waitQueue.InQueue(client)) {
+        return Plugin_Handled;
+    }
+    return Plugin_Continue;
 }
 
 void RunPlayerChangeChecks() {
