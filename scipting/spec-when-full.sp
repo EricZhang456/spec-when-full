@@ -59,8 +59,6 @@ enum struct PlayerQueue {
         if (index == -1) {
             return false;
         }
-        LogMessage("Removing %d from queue", userId);
-        LogStackTrace("trace");
         this.clients.Erase(index);
         return true;
     }
@@ -131,8 +129,6 @@ public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const c
 }
 
 public void Event_OnPlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
-    PrintToChatAll("hi");
-    LogMessage("disconnect");
     int userid = event.GetInt("userid");
     waitQueue.RemoveUserIdFromQueue(userid);
     spectatorQueue.RemoveUserIdFromQueue(userid);
@@ -162,13 +158,11 @@ void SetVisibleMaxPlayers() {
         cvarVisibleMaxPlayers.IntValue = -1;
         return;
     }
-    LogMessage("maxHumanPlayers: %d", maxHumanPlayers);
     cvarVisibleMaxPlayers.IntValue = cvarMaxPlayersInGame.IntValue;
 }
 
 public Action OnClientJoinTeam(int client, const char[] command, int argc) {
     bool isServerOverloaded = GetHumanCount() >= cvarMaxPlayersInGame.IntValue;
-    PrintToChatAll("HumanCount: %d MaxPlayers: %d", GetHumanCount(), cvarMaxPlayersInGame.IntValue)
     if (!isServerOverloaded) {
         RunPlayerChangeChecks();
         return Plugin_Continue;
