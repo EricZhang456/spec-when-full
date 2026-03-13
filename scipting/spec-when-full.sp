@@ -163,8 +163,18 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
     if (!(StrEqual(team, JOIN_TEAM_AUTO, false) || StrEqual(team, JOIN_TEAM_BLU, false) || StrEqual(team, JOIN_TEAM_RED, false))) {
         return Plugin_Continue;
     }
-    if (IsServerFull() || spectatorQueue.InQueue(client)) {
-        spectatorQueue.Offer(client);
+    bool inSpecQueue = spectatorQueue.InQueue(client);
+    bool isServerFull = IsServerFull();
+    // handle when the server is overloaded but there are less than 24 players on both teams
+    if (!isServerFull) {
+        spectatorQueue.RemoveFromQueue(client);
+        waitQueue.RemoveFromQueue(client);
+        return Plugin_Continue;
+    }
+    if (isServerFull || inSpecQueue) {
+        if (!inSpecQueue) {
+            spectatorQueue.Offer(client);
+        }
         ChangeClientTeam(client, TFTeam_Spectator);
         PrintToChat(client, "%t", "SPEC_WHEN_FULL_JOIN_SPEC");
         return Plugin_Handled;
