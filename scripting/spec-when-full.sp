@@ -22,8 +22,9 @@ public Plugin myinfo = {
 };
 
 ConVar cvarMaxPlayersInGame;
-ConVar cvarVisibleMaxPlayers;
+ConVar cvarPutSpecInAutoJoin;
 
+ConVar cvarVisibleMaxPlayers;
 ConVar cvarSourceTVEnabled;
 ConVar cvarReplayEnabled;
 
@@ -87,6 +88,7 @@ public void OnPluginStart() {
     spectatorQueue.Init();
 
     cvarMaxPlayersInGame = CreateConVar("sm_fullspec_maxplayers_in_game", "24", "Maximum amount of players allowed in game. Set to -1 to disable.");
+    cvarPutSpecInAutoJoin = CreateConVar("sm_fullspec_put_spec_in_autojoin", "1", "Automatically put spectators into autojoin when server is full.");
 
     cvarVisibleMaxPlayers = FindConVar("sv_visiblemaxplayers");
     cvarSourceTVEnabled = FindConVar("tv_enable");
@@ -195,7 +197,11 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
             spectatorQueue.Offer(client);
         }
         ChangeClientTeam(client, TFTeam_Spectator);
-        PrintToChat(client, "%t", "SPEC_WHEN_FULL_JOIN_SPEC");
+        bool putInAutoJoin = cvarPutSpecInAutoJoin.BoolValue;
+        if (putInAutoJoin) {
+            waitQueue.Offer(client);
+        }
+        PrintToChat(client, "%t", putInAutoJoin ? "SPEC_WHEN_FULL_JOIN_SPEC_AUTO" : "SPEC_WHEN_FULL_JOIN_SPEC");
         return Plugin_Handled;
     }
     return Plugin_Continue;
