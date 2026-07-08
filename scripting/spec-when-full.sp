@@ -258,7 +258,7 @@ int GetActualMaxHumanPlayers() {
 }
 
 int GetHumanCount() {
-    return GetClientCount() - GetPlayersToDeduct();
+    return GetClientCount(false) - GetPlayersToDeduct();
 }
 
 int GetPlayersToDeduct() {
