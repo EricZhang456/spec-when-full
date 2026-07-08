@@ -45,9 +45,11 @@ enum struct PlayerQueue {
     }
 
     int Poll() {
-        int lastIndex = this.clients.Length - 1;
-        int value = this.clients.Get(lastIndex);
-        this.clients.Erase(lastIndex);
+        if (this.IsEmpty()) {
+            return -1;
+        }
+        int value = this.clients.Get(0);
+        this.clients.Erase(0);
         return GetClientOfUserId(value);
     }
 
