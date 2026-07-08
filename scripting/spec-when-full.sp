@@ -233,6 +233,16 @@ public Action OnAFKKick(int client) {
     return Plugin_Continue;
 }
 
+public void OnAFKSwitch(int client) {
+    if (GetHumanCount() < cvarMaxPlayersInGame.IntValue) {
+        return;
+    }
+    if (!spectatorQueue.InQueue(client)) {
+        spectatorQueue.Offer(client);
+    }
+    RunPlayerChangeChecks();
+}
+
 void RunPlayerChangeChecks() {
     while (!IsServerFull() && !waitQueue.IsEmpty()) {
         int client = waitQueue.Poll();
