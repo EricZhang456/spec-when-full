@@ -198,7 +198,7 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
         }
         ChangeClientTeam(client, TFTeam_Spectator);
         bool putInAutoJoin = cvarPutSpecInAutoJoin.BoolValue;
-        if (putInAutoJoin) {
+        if (putInAutoJoin && !waitQueue.InQueue(client)) {
             waitQueue.Offer(client);
         }
         PrintToChat(client, "%t", putInAutoJoin ? "SPEC_WHEN_FULL_JOIN_SPEC_AUTO" : "SPEC_WHEN_FULL_JOIN_SPEC");
