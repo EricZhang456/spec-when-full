@@ -101,6 +101,7 @@ public void OnPluginStart() {
 
     RegConsoleCmd("sm_autojoin", Cmd_AutoJoin, "Spectator auto-join.");
     AddCommandListener(OnClientJoinTeam, "jointeam");
+    HookEvent("player_connect", Event_OnPlayerConnect);
     HookEvent("player_disconnect", Event_OnPlayerDisconnect);
     HookEvent("server_shutdown", Event_OnServerShutdown);
 
@@ -130,6 +131,20 @@ public void OnPluginEnd() {
 
 public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const char[] newValue) {
     SetVisibleMaxPlayers();
+}
+
+public void Event_OnPlayerConnect(Event event, const char[] name, bool dontBroadcast) {
+    if (GetHumanCount() != cvarMaxPlayersInGame.IntValue) {
+        return;
+    }
+    for (int i = 1; i <= MaxClients; i++) {
+        if (IsFakeClient(i) || IsClientSourceTV(i) || IsClientReplay(i)) {
+            continue;
+        }
+        if (IsClientInGame(i) && IsClientObserver(i) && !spectatorQueue.InQueue(i)) {
+            spectatorQueue.Offer(i);
+        }
+    }
 }
 
 public void Event_OnPlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
