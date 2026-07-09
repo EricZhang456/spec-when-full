@@ -233,6 +233,9 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
 }
 
 public Action Cmd_AutoJoin(int client, int args) {
+    if (client <= 0) {
+        return Plugin_Handled;
+    }
     if (!IsServerFull()) {
         ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_NOT_FULL");
         return Plugin_Handled;
