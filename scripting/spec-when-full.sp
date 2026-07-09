@@ -139,10 +139,10 @@ public void Event_OnPlayerConnect(Event event, const char[] name, bool dontBroad
         return;
     }
     for (int i = 1; i <= MaxClients; i++) {
-        if (IsFakeClient(i) || IsClientSourceTV(i) || IsClientReplay(i)) {
+        if (!IsClientInGame(i) || IsFakeClient(i) || IsClientSourceTV(i) || IsClientReplay(i)) {
             continue;
         }
-        if (IsClientInGame(i) && IsClientObserver(i) && !spectatorQueue.InQueue(i)) {
+        if (IsClientObserver(i) && !spectatorQueue.InQueue(i)) {
             spectatorQueue.Offer(i);
         }
     }
@@ -204,12 +204,6 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
     }
     bool inSpecQueue = spectatorQueue.InQueue(client);
     bool isServerFull = IsServerFull();
-    // handle when the server is overloaded but there are less than 24 players on both teams
-    if (!isServerFull) {
-        spectatorQueue.RemoveFromQueue(client);
-        waitQueue.RemoveFromQueue(client);
-        return Plugin_Continue;
-    }
     if (isServerFull || inSpecQueue) {
         if (!inSpecQueue) {
             spectatorQueue.Offer(client);
@@ -222,6 +216,9 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
         PrintToChat(client, "%t", putInAutoJoin ? "SPEC_WHEN_FULL_JOIN_SPEC_AUTO" : "SPEC_WHEN_FULL_JOIN_SPEC");
         return Plugin_Handled;
     }
+    // handle when the server is overloaded but there are less than 24 players on both teams
+    spectatorQueue.RemoveFromQueue(client);
+    waitQueue.RemoveFromQueue(client);
     return Plugin_Continue;
 }
 
