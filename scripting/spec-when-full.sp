@@ -40,8 +40,12 @@ enum struct PlayerQueue {
         delete this.clients;
     }
 
+    void OfferViaUserId(int userId) {
+        this.clients.Push(userId);
+    }
+
     void Offer(int client) {
-        this.clients.Push(GetClientUserId(client));
+        this.OfferViaUserId(GetClientUserId(client));
     }
 
     int Poll() {
@@ -134,17 +138,20 @@ public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const c
 }
 
 public void Event_OnPlayerConnect(Event event, const char[] name, bool dontBroadcast) {
+    int humanCount = GetHumanCount();
+    int maxPlayers = cvarMaxPlayersInGame.IntValue;
     // start tracking spectators when server gets full
-    if (GetHumanCount() != cvarMaxPlayersInGame.IntValue) {
-        return;
-    }
-    for (int i = 1; i <= MaxClients; i++) {
-        if (!IsClientInGame(i) || IsFakeClient(i) || IsClientSourceTV(i) || IsClientReplay(i)) {
-            continue;
+    if (humanCount == maxPlayers) {
+        for (int i = 1; i <= MaxClients; i++) {
+            if (!IsClientInGame(i) || IsFakeClient(i) || IsClientSourceTV(i) || IsClientReplay(i)) {
+                continue;
+            }
+            if (IsClientObserver(i) && !spectatorQueue.InQueue(i)) {
+                spectatorQueue.Offer(i);
+            }
         }
-        if (IsClientObserver(i) && !spectatorQueue.InQueue(i)) {
-            spectatorQueue.Offer(i);
-        }
+    } else if (humanCount > maxPlayers) {
+        spectatorQueue.OfferViaUserId(event.GetInt("userid"));
     }
 }
 
