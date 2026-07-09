@@ -154,6 +154,9 @@ public void Event_OnPlayerConnect(Event event, const char[] name, bool dontBroad
             }
         }
     } else if (humanCount > maxPlayers) {
+        // when a new map loads in, no one has picked a team yet but new clients
+        // will still be able to connect, put them in the spectator queue
+        // immediately so the players on the previous map can get to join the game
         spectatorQueue.OfferViaUserId(event.GetInt("userid"));
     }
 }
