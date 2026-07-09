@@ -2,11 +2,11 @@
 {
     "SPEC_WHEN_FULL_JOIN_SPEC"
     {
-        "en"    "You have been moved to Spectator because the server is full. Type !autojoin to join the game when a slot opens up."
+        "en"    "You have been moved to Spectator because the server is full. Type !autojoin to join the game when a slot opens up. Type !checkautojoin to see the auto join queue."
     }
     "SPEC_WHEN_FULL_JOIN_SPEC_AUTO"
     {
-        "en"    "You have been moved to Spectator because the server is full. You will join the game as soon as a slot opens up. Type !autojoin to leave the auto join queue."
+        "en"    "You have been moved to Spectator because the server is full. You will join the game as soon as a slot opens up. Type !autojoin to leave the auto join queue. Type !checkautojoin to see the auto join queue."
     }
     "SPEC_WHEN_FULL_AUTOJOIN_PLACE_QUEUE"
     {
@@ -23,5 +23,13 @@
     "SPEC_WHEN_FULL_NOT_SPEC"
     {
         "en"    "You must be a spectator to use this command."
+    }
+    "SPEC_WHEN_FULL_SPEC_QUEUE_MENU_TITLE"
+    {
+        "en"    "Clients in auto join queue"
+    }
+    "SPEC_WHEN_FULL_AUTOJOIN_EMPTY"
+    {
+        "en"    "No one is in the auto join queue right now."
     }
 }

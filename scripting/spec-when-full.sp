@@ -104,7 +104,10 @@ public void OnPluginStart() {
     cvarVisibleMaxPlayers.AddChangeHook(OnMaxPlayerCvarChanged);
 
     RegConsoleCmd("sm_autojoin", Cmd_AutoJoin, "Spectator auto-join.");
+    RegConsoleCmd("sm_checkautojoin", Cmd_CheckAutoJoinQueue, "See the auto join queue.");
+
     AddCommandListener(OnClientJoinTeam, "jointeam");
+
     HookEvent("player_connect", Event_OnPlayerConnect);
     HookEvent("player_disconnect", Event_OnPlayerDisconnect);
     HookEvent("server_shutdown", Event_OnServerShutdown);
@@ -246,6 +249,40 @@ public Action Cmd_AutoJoin(int client, int args) {
     waitQueue.Offer(client);
     ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_AUTOJOIN_PLACE_QUEUE");
     return Plugin_Handled;
+}
+
+public Action Cmd_CheckAutoJoinQueue(int client, int args) {
+    if (client <= 0) {
+        return Plugin_Handled;
+    }
+    if (!IsServerFull()) {
+        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_NOT_FULL");
+        return Plugin_Handled;
+    }
+    if (waitQueue.IsEmpty()) {
+        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_AUTOJOIN_EMPTY");
+        return Plugin_Handled;
+    }
+    char title[BASE_STR_LEN];
+    Format(title, sizeof(title), "%T", client, "SPEC_WHEN_FULL_SPEC_QUEUE_MENU_TITLE");
+    Menu menu = new Menu(Menu_AutoJoinList);
+    menu.SetTitle(title);
+    menu.Pagination = 10;
+    menu.ExitButton = true;
+    for (int i = 0; i < waitQueue.clients.Length; i++) {
+        int specClientIndex = GetClientOfUserId(waitQueue.clients.Get(i));
+        char clientName[MAX_NAME_LENGTH];
+        GetClientName(specClientIndex, clientName, sizeof(clientName));
+        menu.AddItem(clientName, clientName, ITEMDRAW_DISABLED);
+    }
+    menu.Display(client, MENU_TIME_FOREVER);
+    return Plugin_Handled;
+}
+
+public void Menu_AutoJoinList(Menu menu, MenuAction action, int param1, int param2) {
+    if (action == MenuAction_End) {
+        delete menu;
+    }
 }
 
 public Action OnAFKKick(int client) {
