@@ -134,6 +134,7 @@ public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const c
 }
 
 public void Event_OnPlayerConnect(Event event, const char[] name, bool dontBroadcast) {
+    // start tracking spectators when server gets full
     if (GetHumanCount() != cvarMaxPlayersInGame.IntValue) {
         return;
     }

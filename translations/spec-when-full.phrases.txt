@@ -6,7 +6,7 @@
     }
     "SPEC_WHEN_FULL_JOIN_SPEC_AUTO"
     {
-        "en"    "You have been moved to Spectator because the server is full. You will join the game as soon as a slot opens up."
+        "en"    "You have been moved to Spectator because the server is full. You will join the game as soon as a slot opens up. Type !autojoin to leave the auto join queue."
     }
     "SPEC_WHEN_FULL_AUTOJOIN_PLACE_QUEUE"
     {
