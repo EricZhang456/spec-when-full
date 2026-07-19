@@ -287,7 +287,7 @@ public Action Cmd_CheckAutoJoinQueue(int client, int args) {
         return Plugin_Handled;
     }
     char title[BASE_STR_LEN];
-    Format(title, sizeof(title), "%T", client, "SPEC_WHEN_FULL_SPEC_QUEUE_MENU_TITLE");
+    Format(title, sizeof(title), "%T", "SPEC_WHEN_FULL_SPEC_QUEUE_MENU_TITLE", client);
     Menu menu = new Menu(Menu_AutoJoinList);
     menu.SetTitle(title);
     menu.Pagination = 10;
