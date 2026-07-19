@@ -107,7 +107,10 @@ public void OnPluginStart() {
     cvarMaxPlayersInGame.AddChangeHook(OnMaxPlayerCvarChanged);
     cvarVisibleMaxPlayers.AddChangeHook(OnMaxPlayerCvarChanged);
 
-    RegConsoleCmd("sm_autojoin", Cmd_AutoJoin, "Spectator auto-join.");
+    RegConsoleCmd("sm_joinqueue", Cmd_AutoJoin, "Join the auto-join queue.");
+    RegConsoleCmd("sm_joinq", Cmd_AutoJoin, "Join the auto-join queue.");
+    RegConsoleCmd("sm_leavequeue", Cmd_LeaveAutoJoin, "Leave the auto-join queue.");
+    RegConsoleCmd("sm_leaveq", Cmd_LeaveAutoJoin, "Leave the auto-join queue.");
     RegConsoleCmd("sm_checkautojoin", Cmd_CheckAutoJoinQueue, "See the auto join queue.");
 
 #if defined DEBUG
@@ -193,7 +196,7 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
     bool isClientJoiningSpec = StrEqual(team, JOIN_TEAM_SPECTATOR, false);
     if (!isServerOverloaded) {
 #if defined DEBUG
-    LogMessage("Server is not overloaded right now");
+        LogMessage("Server is not overloaded right now");
 #endif
         if (isClientJoiningGame && !clientsInGame.InQueue(client)) {
 #if defined DEBUG
@@ -210,12 +213,20 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
         RunPlayerChangeChecks();
         return Plugin_Continue;
     }
+    bool putInAutoJoin = cvarPutSpecInAutoJoin.BoolValue;
+    bool clientInClientList = clientsInGame.InQueue(client);
     if (isClientJoiningSpec) {
 #if defined DEBUG
         LogMessage("Removing client %s (user id %d) from clientsInGame", clientName, clientUserId);
 #endif
         clientsInGame.RemoveFromQueue(client);
         ChangeClientTeam(client, TFTeam_Spectator);
+        if (IsServerFull() && !clientInClientList) {
+            if (putInAutoJoin && !waitQueue.InQueue(client)) {
+                waitQueue.Offer(client);
+            }
+            PrintToChat(client, "%t", putInAutoJoin ? "SPEC_WHEN_FULL_JOIN_SPEC_AUTO" : "SPEC_WHEN_FULL_JOIN_SPEC");
+        }
         // handle when we have a full server but someone on red/blu switches to spec
         RunPlayerChangeChecks();
         return Plugin_Handled;
@@ -224,15 +235,13 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
     if (!isClientJoiningGame) {
         return Plugin_Continue;
     }
-    bool clientInClientList = clientsInGame.InQueue(client);
 #if defined DEBUG
     LogMessage("Client %s (user id %d) in clientsInGame: %s", clientName, clientUserId, clientInClientList ? "true" : "false");
     LogMessage("clientsInGame length: %d", clientsInGame.GetLength());
     LogMessage("IsServerFull: %s", IsServerFull() ? "true" : "false");
 #endif
-    if (IsServerFull() || (clientsInGame.GetLength() >= cvarMaxPlayersInGame.IntValue && !clientInClientList)) {
+    if (IsServerFull() && !clientInClientList) {
         ChangeClientTeam(client, TFTeam_Spectator);
-        bool putInAutoJoin = cvarPutSpecInAutoJoin.BoolValue;
         if (putInAutoJoin && !waitQueue.InQueue(client)) {
             waitQueue.Offer(client);
         }
@@ -265,12 +274,32 @@ public Action Cmd_AutoJoin(int client, int args) {
         return Plugin_Handled;
     }
     if (waitQueue.InQueue(client)) {
-        waitQueue.RemoveFromQueue(client);
-        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_AUTOJOIN_REMOVE_QUEUE");
+        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_IN_QUEUE");
         return Plugin_Handled;
     }
     waitQueue.Offer(client);
     ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_AUTOJOIN_PLACE_QUEUE");
+    return Plugin_Handled;
+}
+
+public Action Cmd_LeaveAutoJoin(int client, int args) {
+    if (client <= 0) {
+        return Plugin_Handled;
+    }
+    if (!IsServerFull()) {
+        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_NOT_FULL");
+        return Plugin_Handled;
+    }
+    if (GetClientTeam(client) != view_as<int>(TFTeam_Spectator)) {
+        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_NOT_SPEC");
+        return Plugin_Handled;
+    }
+    if (waitQueue.InQueue(client)) {
+        waitQueue.RemoveFromQueue(client);
+        ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_AUTOJOIN_REMOVE_QUEUE");
+        return Plugin_Handled;
+    }
+    ReplyToCommand(client, "%t", "SPEC_WHEN_FULL_NOT_IN_QUEUE");
     return Plugin_Handled;
 }
 
@@ -292,7 +321,7 @@ public Action Cmd_CheckAutoJoinQueue(int client, int args) {
     menu.SetTitle(title);
     menu.Pagination = 10;
     menu.ExitButton = true;
-    for (int i = 0; i < waitQueue.clients.Length; i++) {
+    for (int i = 0; i < waitQueue.GetLength(); i++) {
         int specClientIndex = GetClientOfUserId(waitQueue.clients.Get(i));
         char clientName[MAX_NAME_LENGTH];
         GetClientName(specClientIndex, clientName, sizeof(clientName));
@@ -311,7 +340,7 @@ public Action Cmd_CheckClientsInGame(int client, int args) {
     menu.SetTitle("Clients in clientsInGame");
     menu.Pagination = 10;
     menu.ExitButton = true;
-    for (int i = 0; i < clientsInGame.clients.Length; i++) {
+    for (int i = 0; i < clientsInGame.GetLength(); i++) {
         int clientUserId = clientsInGame.clients.Get(i);
         int clientIndex = GetClientOfUserId(clientUserId);
         char clientName[MAX_NAME_LENGTH];
@@ -355,12 +384,15 @@ void RunPlayerChangeChecks() {
         GetClientName(client, name, sizeof(name));
         LogMessage("Pulling %s (user id %d) from auto join queue", name, clientUserId);
 #endif
+        if (!clientsInGame.InQueue(client)) {
+            clientsInGame.Offer(client);
+        }
         FakeClientCommand(client, "jointeam " ... JOIN_TEAM_AUTO);
     }
 }
 
 int GetPlayersInGame() {
-    return GetTeamClientCount(TFTeam_Blue) + GetTeamClientCount(TFTeam_Red);
+    return clientsInGame.GetLength();
 }
 
 bool IsServerFull() {
