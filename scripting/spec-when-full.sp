@@ -178,6 +178,9 @@ void SetVisibleMaxPlayers() {
 }
 
 public Action OnClientJoinTeam(int client, const char[] command, int argc) {
+    if (cvarMaxPlayersInGame.IntValue == -1) {
+        return Plugin_Continue;
+    }
 #if defined DEBUG
     int clientUserId = GetClientUserId(client);
     char clientName[MAX_NAME_LENGTH];
@@ -396,6 +399,9 @@ int GetPlayersInGame() {
 }
 
 bool IsServerFull() {
+    if (cvarMaxPlayersInGame.IntValue == -1) {
+        return false;
+    }
     return GetPlayersInGame() >= cvarMaxPlayersInGame.IntValue;
 }
 
