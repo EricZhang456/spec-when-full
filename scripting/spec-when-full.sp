@@ -110,6 +110,10 @@ public void OnPluginStart() {
     RegConsoleCmd("sm_autojoin", Cmd_AutoJoin, "Spectator auto-join.");
     RegConsoleCmd("sm_checkautojoin", Cmd_CheckAutoJoinQueue, "See the auto join queue.");
 
+#if defined DEBUG
+    RegAdminCmd("sm_checkclientsingame", Cmd_CheckClientsInGame, ADMFLAG_CONFIG);
+#endif
+
     AddCommandListener(OnClientJoinTeam, "jointeam");
 
     HookEvent("player_disconnect", Event_OnPlayerDisconnect);
@@ -171,28 +175,49 @@ void SetVisibleMaxPlayers() {
 }
 
 public Action OnClientJoinTeam(int client, const char[] command, int argc) {
+#if defined DEBUG
+    int clientUserId = GetClientUserId(client);
+    char clientName[MAX_NAME_LENGTH];
+    GetClientName(client, clientName, sizeof(clientName));
+#endif
+
     bool isServerOverloaded = GetHumanCount() >= cvarMaxPlayersInGame.IntValue;
     char team[BASE_STR_LEN];
     GetCmdArg(1, team, sizeof(team));
+
+#if defined DEBUG
+    LogMessage("Client %s (user id %d) issued \"jointeam %s\"", clientName, clientUserId, team);
+#endif
+
     bool isClientJoiningGame = StrEqual(team, JOIN_TEAM_AUTO, false) || StrEqual(team, JOIN_TEAM_BLU, false) || StrEqual(team, JOIN_TEAM_RED, false);
     bool isClientJoiningSpec = StrEqual(team, JOIN_TEAM_SPECTATOR, false);
     if (!isServerOverloaded) {
+#if defined DEBUG
+    LogMessage("Server is not overloaded right now");
+#endif
         if (isClientJoiningGame && !clientsInGame.InQueue(client)) {
+#if defined DEBUG
+            LogMessage("Adding client %s (user id %d) to clientsInGame", clientName, clientUserId);
+#endif
             clientsInGame.Offer(client);
         }
         if (isClientJoiningSpec) {
+#if defined DEBUG
+            LogMessage("Removing client %s (user id %d) from clientsInGame", clientName, clientUserId);
+#endif
             clientsInGame.RemoveFromQueue(client);
         }
         RunPlayerChangeChecks();
         return Plugin_Continue;
     }
     if (isClientJoiningSpec) {
+#if defined DEBUG
+        LogMessage("Removing client %s (user id %d) from clientsInGame", clientName, clientUserId);
+#endif
         clientsInGame.RemoveFromQueue(client);
         ChangeClientTeam(client, TFTeam_Spectator);
         // handle when we have a full server but someone on red/blu switches to spec
-        if (isServerOverloaded) {
-            RunPlayerChangeChecks();
-        }
+        RunPlayerChangeChecks();
         return Plugin_Handled;
     }
     // just in case someone typed jointeam hdfsiufhsdfi
@@ -200,15 +225,26 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
         return Plugin_Continue;
     }
     bool clientInClientList = clientsInGame.InQueue(client);
+#if defined DEBUG
+    LogMessage("Client %s (user id %d) in clientsInGame: %s", clientName, clientUserId, clientInClientList ? "true" : "false");
+    LogMessage("clientsInGame length: %d", clientsInGame.GetLength());
+    LogMessage("IsServerFull: %s", IsServerFull() ? "true" : "false");
+#endif
     if (IsServerFull() || (clientsInGame.GetLength() >= cvarMaxPlayersInGame.IntValue && !clientInClientList)) {
         ChangeClientTeam(client, TFTeam_Spectator);
         bool putInAutoJoin = cvarPutSpecInAutoJoin.BoolValue;
         if (putInAutoJoin && !waitQueue.InQueue(client)) {
             waitQueue.Offer(client);
         }
+#if defined DEBUG
+        LogMessage("Preventing client %s (user id %d) from joining the game", clientName, clientUserId);
+#endif
         PrintToChat(client, "%t", putInAutoJoin ? "SPEC_WHEN_FULL_JOIN_SPEC_AUTO" : "SPEC_WHEN_FULL_JOIN_SPEC");
         return Plugin_Handled;
     }
+#if defined DEBUG
+    LogMessage("Adding client %s (user id %d) to clientsInGame", clientName, clientUserId);
+#endif
     if (!clientInClientList) {
         clientsInGame.Offer(client);
     }
@@ -266,6 +302,29 @@ public Action Cmd_CheckAutoJoinQueue(int client, int args) {
     return Plugin_Handled;
 }
 
+#if defined DEBUG
+public Action Cmd_CheckClientsInGame(int client, int args) {
+    if (client <= 0) {
+        return Plugin_Handled;
+    }
+    Menu menu = new Menu(Menu_AutoJoinList);
+    menu.SetTitle("Clients in clientsInGame");
+    menu.Pagination = 10;
+    menu.ExitButton = true;
+    for (int i = 0; i < clientsInGame.clients.Length; i++) {
+        int clientUserId = clientsInGame.clients.Get(i);
+        int clientIndex = GetClientOfUserId(clientUserId);
+        char clientName[MAX_NAME_LENGTH];
+        GetClientName(clientIndex, clientName, sizeof(clientName));
+        char item[256];
+        Format(item, sizeof(item), "%s (user id %d)", clientName, clientUserId);
+        menu.AddItem(clientName, item, ITEMDRAW_DISABLED);
+    }
+    menu.Display(client, MENU_TIME_FOREVER);
+    return Plugin_Handled;
+}
+#endif
+
 public void Menu_AutoJoinList(Menu menu, MenuAction action, int param1, int param2) {
     if (action == MenuAction_End) {
         delete menu;
@@ -285,8 +344,17 @@ public void OnAFKSwitch(int client) {
 }
 
 void RunPlayerChangeChecks() {
+#if defined DEBUG
+    LogMessage("RunPlayerChangeChecks()");
+#endif
     while (!IsServerFull() && !waitQueue.IsEmpty()) {
         int client = waitQueue.Poll();
+#if defined DEBUG
+        int clientUserId = GetClientUserId(client);
+        char name[MAX_NAME_LENGTH];
+        GetClientName(client, name, sizeof(name));
+        LogMessage("Pulling %s (user id %d) from auto join queue", name, clientUserId);
+#endif
         FakeClientCommand(client, "jointeam " ... JOIN_TEAM_AUTO);
     }
 }
