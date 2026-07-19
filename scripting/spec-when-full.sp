@@ -81,17 +81,21 @@ enum struct PlayerQueue {
     bool IsEmpty() {
         return this.clients.Length == 0;
     }
+
+    int GetLength() {
+        return this.clients.Length;
+    }
 }
 
 PlayerQueue waitQueue;
 // queue operations (poll/offer) are useless here but i am reusing this struct
-PlayerQueue spectatorQueue;
+PlayerQueue clientsInGame;
 
 public void OnPluginStart() {
     LoadTranslations("spec-when-full.phrases.txt");
 
     waitQueue.Init();
-    spectatorQueue.Init();
+    clientsInGame.Init();
 
     cvarMaxPlayersInGame = CreateConVar("sm_fullspec_maxplayers_in_game", "24", "Maximum amount of players allowed in game. Set to -1 to disable.");
     cvarPutSpecInAutoJoin = CreateConVar("sm_fullspec_put_spec_in_autojoin", "1", "Automatically put spectators into autojoin when server is full.");
@@ -108,9 +112,7 @@ public void OnPluginStart() {
 
     AddCommandListener(OnClientJoinTeam, "jointeam");
 
-    HookEvent("player_connect", Event_OnPlayerConnect);
     HookEvent("player_disconnect", Event_OnPlayerDisconnect);
-    HookEvent("server_shutdown", Event_OnServerShutdown);
 
     AutoExecConfig();
 }
@@ -124,7 +126,7 @@ public void OnAllPluginsLoaded() {
 
 public void OnServerEnterHibernation() {
     waitQueue.Clear();
-    spectatorQueue.Clear();
+    clientsInGame.Clear();
 }
 
 public void OnConfigsExecuted() {
@@ -133,38 +135,17 @@ public void OnConfigsExecuted() {
 
 public void OnPluginEnd() {
     waitQueue.Deinit();
-    spectatorQueue.Deinit();
+    clientsInGame.Deinit();
 }
 
 public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const char[] newValue) {
     SetVisibleMaxPlayers();
 }
 
-public void Event_OnPlayerConnect(Event event, const char[] name, bool dontBroadcast) {
-    int humanCount = GetHumanCount();
-    int maxPlayers = cvarMaxPlayersInGame.IntValue;
-    // start tracking spectators when server gets full
-    if (humanCount == maxPlayers) {
-        for (int i = 1; i <= MaxClients; i++) {
-            if (!IsClientInGame(i) || IsFakeClient(i) || IsClientSourceTV(i) || IsClientReplay(i)) {
-                continue;
-            }
-            if (IsClientObserver(i) && !spectatorQueue.InQueue(i)) {
-                spectatorQueue.Offer(i);
-            }
-        }
-    } else if (humanCount > maxPlayers) {
-        // when a new map loads in, no one has picked a team yet but new clients
-        // will still be able to connect, put them in the spectator queue
-        // immediately so the players on the previous map can get to join the game
-        spectatorQueue.OfferViaUserId(event.GetInt("userid"));
-    }
-}
-
 public void Event_OnPlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
     int userid = event.GetInt("userid");
     waitQueue.RemoveUserIdFromQueue(userid);
-    spectatorQueue.RemoveUserIdFromQueue(userid);
+    clientsInGame.RemoveUserIdFromQueue(userid);
     // wait 1 second before running autojoin checks as at this point the client might still be in game
     CreateTimer(1.0, Timer_RunPlayerCheck);
 }
@@ -172,11 +153,6 @@ public void Event_OnPlayerDisconnect(Event event, const char[] name, bool dontBr
 public Action Timer_RunPlayerCheck(Handle timer) {
     RunPlayerChangeChecks();
     return Plugin_Continue;
-}
-
-public void Event_OnServerShutdown(Event event, const char[] name, bool dontBroadcast) {
-    waitQueue.Clear();
-    spectatorQueue.Clear();
 }
 
 void SetVisibleMaxPlayers() {
@@ -196,15 +172,23 @@ void SetVisibleMaxPlayers() {
 
 public Action OnClientJoinTeam(int client, const char[] command, int argc) {
     bool isServerOverloaded = GetHumanCount() >= cvarMaxPlayersInGame.IntValue;
+    char team[BASE_STR_LEN];
+    GetCmdArg(1, team, sizeof(team));
+    bool isClientJoiningGame = StrEqual(team, JOIN_TEAM_AUTO, false) || StrEqual(team, JOIN_TEAM_BLU, false) || StrEqual(team, JOIN_TEAM_RED, false);
+    bool isClientJoiningSpec = StrEqual(team, JOIN_TEAM_SPECTATOR, false);
     if (!isServerOverloaded) {
+        if (isClientJoiningGame && !clientsInGame.InQueue(client)) {
+            clientsInGame.Offer(client);
+        }
+        if (isClientJoiningSpec) {
+            clientsInGame.RemoveFromQueue(client);
+        }
         RunPlayerChangeChecks();
         return Plugin_Continue;
     }
-    char team[BASE_STR_LEN];
-    GetCmdArg(1, team, sizeof(team));
-    if (StrEqual(team, JOIN_TEAM_SPECTATOR, false)) {
+    if (isClientJoiningSpec) {
+        clientsInGame.RemoveFromQueue(client);
         ChangeClientTeam(client, TFTeam_Spectator);
-        spectatorQueue.Offer(client);
         // handle when we have a full server but someone on red/blu switches to spec
         if (isServerOverloaded) {
             RunPlayerChangeChecks();
@@ -212,15 +196,11 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
         return Plugin_Handled;
     }
     // just in case someone typed jointeam hdfsiufhsdfi
-    if (!(StrEqual(team, JOIN_TEAM_AUTO, false) || StrEqual(team, JOIN_TEAM_BLU, false) || StrEqual(team, JOIN_TEAM_RED, false))) {
+    if (!isClientJoiningGame) {
         return Plugin_Continue;
     }
-    bool inSpecQueue = spectatorQueue.InQueue(client);
-    bool isServerFull = IsServerFull();
-    if (isServerFull || inSpecQueue) {
-        if (!inSpecQueue) {
-            spectatorQueue.Offer(client);
-        }
+    bool clientInClientList = clientsInGame.InQueue(client);
+    if (IsServerFull() || (clientsInGame.GetLength() >= cvarMaxPlayersInGame.IntValue && !clientInClientList)) {
         ChangeClientTeam(client, TFTeam_Spectator);
         bool putInAutoJoin = cvarPutSpecInAutoJoin.BoolValue;
         if (putInAutoJoin && !waitQueue.InQueue(client)) {
@@ -229,8 +209,9 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
         PrintToChat(client, "%t", putInAutoJoin ? "SPEC_WHEN_FULL_JOIN_SPEC_AUTO" : "SPEC_WHEN_FULL_JOIN_SPEC");
         return Plugin_Handled;
     }
-    // handle when the server is overloaded but there are less than 24 players on both teams
-    spectatorQueue.RemoveFromQueue(client);
+    if (!clientInClientList) {
+        clientsInGame.Offer(client);
+    }
     waitQueue.RemoveFromQueue(client);
     return Plugin_Continue;
 }
@@ -299,24 +280,14 @@ public Action OnAFKKick(int client) {
 }
 
 public void OnAFKSwitch(int client) {
-    if (GetHumanCount() < cvarMaxPlayersInGame.IntValue) {
-        return;
-    }
-    if (!spectatorQueue.InQueue(client)) {
-        spectatorQueue.Offer(client);
-    }
+    clientsInGame.RemoveFromQueue(client);
     RunPlayerChangeChecks();
 }
 
 void RunPlayerChangeChecks() {
     while (!IsServerFull() && !waitQueue.IsEmpty()) {
         int client = waitQueue.Poll();
-        spectatorQueue.RemoveFromQueue(client);
         FakeClientCommand(client, "jointeam " ... JOIN_TEAM_AUTO);
-    }
-    if (GetHumanCount() < cvarMaxPlayersInGame.IntValue) {
-        // stop tracking spectators when server is not full
-        spectatorQueue.Clear();
     }
 }
 
