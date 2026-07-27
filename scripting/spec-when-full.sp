@@ -381,6 +381,9 @@ void RunPlayerChangeChecks() {
 #endif
     while (!IsServerFull() && !waitQueue.IsEmpty()) {
         int client = waitQueue.Poll();
+        if (!IsClientInGame(client)) {
+            continue;
+        }
 #if defined DEBUG
         int clientUserId = GetClientUserId(client);
         char name[MAX_NAME_LENGTH];
