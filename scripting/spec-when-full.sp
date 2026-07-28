@@ -28,6 +28,8 @@ ConVar cvarVisibleMaxPlayers;
 ConVar cvarSourceTVEnabled;
 ConVar cvarReplayEnabled;
 
+bool isMapLoading = false;
+
 // store userid inside as it will persist during map resets
 enum struct PlayerQueue {
     ArrayList clients;
@@ -143,6 +145,14 @@ public void OnConfigsExecuted() {
 public void OnPluginEnd() {
     waitQueue.Deinit();
     clientsInGame.Deinit();
+}
+
+public void OnMapInit(const char[] mapName) {
+    isMapLoading = true;
+}
+
+public void OnMapStart() {
+    isMapLoading = false;
 }
 
 public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const char[] newValue) {
@@ -379,7 +389,7 @@ void RunPlayerChangeChecks() {
 #if defined DEBUG
     LogMessage("RunPlayerChangeChecks()");
 #endif
-    while (!IsServerFull() && !waitQueue.IsEmpty()) {
+    while (!isMapLoading && !IsServerFull() && !waitQueue.IsEmpty()) {
         int client = waitQueue.Poll();
         if (!IsClientInGame(client)) {
             continue;
