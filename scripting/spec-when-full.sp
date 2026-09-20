@@ -160,6 +160,9 @@ public void OnMaxPlayerCvarChanged(ConVar convar, const char[] oldValue, const c
 }
 
 public void Event_OnPlayerDisconnect(Event event, const char[] name, bool dontBroadcast) {
+    if (cvarMaxPlayersInGame.IntValue == -1) {
+        return;
+    }
     int userid = event.GetInt("userid");
     waitQueue.RemoveUserIdFromQueue(userid);
     clientsInGame.RemoveUserIdFromQueue(userid);
@@ -275,7 +278,7 @@ public Action OnClientJoinTeam(int client, const char[] command, int argc) {
 }
 
 public Action Cmd_AutoJoin(int client, int args) {
-    if (client <= 0) {
+    if (cvarMaxPlayersInGame.IntValue == -1 || client <= 0) {
         return Plugin_Handled;
     }
     if (!IsServerFull()) {
@@ -296,7 +299,7 @@ public Action Cmd_AutoJoin(int client, int args) {
 }
 
 public Action Cmd_LeaveAutoJoin(int client, int args) {
-    if (client <= 0) {
+    if (cvarMaxPlayersInGame.IntValue == -1 || client <= 0) {
         return Plugin_Handled;
     }
     if (!IsServerFull()) {
@@ -317,7 +320,7 @@ public Action Cmd_LeaveAutoJoin(int client, int args) {
 }
 
 public Action Cmd_CheckAutoJoinQueue(int client, int args) {
-    if (client <= 0) {
+    if (cvarMaxPlayersInGame.IntValue == -1 || client <= 0) {
         return Plugin_Handled;
     }
     if (!IsServerFull()) {
